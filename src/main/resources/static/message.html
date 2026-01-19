@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>留言板</title>
+    <style>
+        /* --- 1. 基础样式重置 --- */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f3f4f6; /* 浅灰背景，保护视力 */
+            color: #1f2937;
+            line-height: 1.6;
+        }
+
+        /* --- 2. 顶部导航栏 --- */
+        nav {
+            background-color: #fff;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .brand { font-size: 1.5rem; font-weight: bold; color: #3b82f6; }
+        .user-info span { margin-right: 15px; color: #6b7280; }
+        .btn-logout {
+            color: #ef4444;
+            text-decoration: none;
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+
+        /* --- 3. 主体容器 --- */
+        .container {
+            max-width: 800px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+
+        /* --- 4. 发布框卡片 --- */
+        .card {
+            background: #fff;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+            transition: transform 0.2s;
+        }
+        .input-group textarea {
+            width: 100%;
+            height: 100px;
+            padding: 1rem;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            resize: none;
+            font-size: 1rem;
+            margin-bottom: 1rem;
+            outline: none;
+        }
+        .input-group textarea:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px #93c5fd; }
+
+        .btn-primary {
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            float: right;
+        }
+        .btn-primary:hover { background-color: #2563eb; }
+        .clearfix::after { content: ""; display: table; clear: both; }
+
+        /* --- 5. 留言列表 --- */
+        .message-item {
+            border-bottom: 1px solid #f3f4f6;
+            padding: 1.5rem 0;
+            display: flex;
+            gap: 15px;
+        }
+        .avatar {
+            width: 45px;
+            height: 45px;
+            background-color: #dbeafe;
+            color: #1e40af;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 1.2rem;
+            flex-shrink: 0;
+        }
+        .msg-content { flex-grow: 1; }
+        .msg-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            font-size: 0.9rem;
+        }
+        .username { font-weight: bold; color: #374151; }
+        .time { color: #9ca3af; font-size: 0.85rem; }
+        .msg-body { color: #4b5563; white-space: pre-wrap; /* 保留换行 */ }
+
+        /* --- 6. 分页按钮 --- */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 2rem;
+            margin-bottom: 3rem;
+        }
+        .page-btn {
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            color: #374151;
+        }
+        .page-btn:disabled { background: #f3f4f6; color: #ccc; cursor: not-allowed; }
+        .page-info { display: flex; align-items: center; color: #6b7280; font-size: 0.9rem;}
+    </style>
+</head>
+<body>
+
+<h2>留言板</h2>
+
+<button onclick="add()">发布</button>
+
+<hr>
+
+<nav>
+    <div class="brand">💬 树洞留言板</div>
+    <div class="user-info">
+        <span id="current-user">正在获取用户信息...</span>
+        <a onclick="logout()" class="btn-logout">退出登录</a>
+    </div>
+</nav>
+
+<div class="container">
+    <div class="card clearfix">
+        <div class="input-group">
+            <label for="content">内容</label>
+            <textarea id="content" placeholder="说话！！！！分享你的新鲜事... (支持表情 ✨)"></textarea>
+        </div>
+        <button class="btn-primary" onclick="add()">发布留言</button>
+    </div>
+
+    <div class="card" style="padding-top: 0;">
+        <div id="list">
+            <div style="text-align: center; padding: 20px; color: #999;">加载中...</div>
+        </div>
+    </div>
+
+    <div class="pagination">
+        <button class="page-btn" onclick="changePage(-1)" id="btn-prev">上一页</button>
+        <span class="page-info">第 <span id="curr-page">1</span> / <span id="total-pages">1</span> 页</span>
+        <button class="page-btn" onclick="changePage(1)" id="btn-next">下一页</button>
+    </div>
+</div>
+
+<script>
+    // 全局分页变量
+    let currentPage = 1;
+    let pageSize = 5;
+    let totalPages = 1;
+
+    // 页面加载完毕后立即执行
+    window.onload = function() {
+        checkLogin();
+        loadMessages();
+    };
+
+    // 1. 检查是否登录 (可选，为了显示用户名)
+    function checkLogin() {
+        // 这里简单模拟，实际上你可以写一个接口 /user/current 来获取当前用户信息
+        // 如果后端 Session 里有 loginUser，你可以通过页面渲染或者 fetch 获取
+        document.getElementById('current-user').innerText = "欢迎回来";
+    }
+
+    // 2. 加载留言列表 (核心)
+    function loadMessages() {
+        fetch(`/message/list?page=${currentPage}&size=${pageSize}`,{
+            method: 'GET',
+            headers:{
+                'token': localStorage.getItem("token")
+            }
+        })
+            .then(res => res.json())
+            .then(res => {
+                if(res.code === 200) {
+                    const pageData = res.data;
+                    renderList(pageData.records);
+                    updatePagination(pageData);
+                } else {
+                    alert("加载失败：" + res.message);
+                }
+            })
+            .catch(err => console.error(err));
+    }
+
+    // 3. 渲染 HTML
+    function renderList(messages) {
+        const listDiv = document.getElementById('list');
+        listDiv.innerHTML = ''; // 清空旧数据
+
+        if(!messages || messages.length === 0) {
+            listDiv.innerHTML = '<div style="text-align: center; padding: 20px; color: #ccc;">暂时还没有留言，快来抢沙发！</div>';
+            return;
+        }
+
+        messages.forEach(m => {
+            // 提取用户名的首字母作为头像
+            const firstChar = m.username ? m.username.charAt(0).toUpperCase() : 'U';
+
+            // 这里的字段名必须和你的 MessageVO 保持一致！
+            const itemHtml = `
+                    <div class="message-item">
+                        <div class="avatar">${firstChar}</div>
+                        <div class="msg-content">
+                            <div class="msg-header">
+                                <span class="username">${m.username || '匿名用户'}</span>
+                                <span class="time">${formatDate(m.createTime)}</span>
+                            </div>
+                            <div class="msg-body">${m.content}</div>
+                        </div>
+                    </div>
+                `;
+            listDiv.innerHTML += itemHtml;
+        });
+    }
+
+    // 4. 更新分页按钮状态
+    function updatePagination(pageData) {
+        totalPages = pageData.pages; // 后端 MyBatis-Plus 返回的总页数
+        document.getElementById('curr-page').innerText = currentPage;
+        document.getElementById('total-pages').innerText = totalPages;
+
+        document.getElementById('btn-prev').disabled = (currentPage === 1);
+        document.getElementById('btn-next').disabled = (currentPage >= totalPages);
+    }
+
+    // 5. 翻页逻辑
+    function changePage(step) {
+        const newPage = currentPage + step;
+        if(newPage > 0 && newPage <= totalPages) {
+            currentPage = newPage;
+            loadMessages();
+        }
+    }
+
+    // 6. 发布留言
+    function add() {
+        const content = document.getElementById('content').value;
+        if(!content.trim()) {
+            alert("写点什么再发布吧！");
+            return;
+        }
+
+        fetch('/message/add', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'token': localStorage.getItem("token")
+            },
+            body: JSON.stringify({ content: content })
+        })
+            .then(res => res.json())
+            .then(data => {
+                if(data.code === 200) {
+                    document.getElementById('content').value = ''; // 清空输入框
+                    currentPage = 1; // 发布后跳回第一页看最新消息
+                    loadMessages();  // 重新加载列表
+                } else {
+                    alert("发布失败：" + data.message);
+                }
+            });
+    }
+
+    // 7. 退出登录
+    function logout() {
+        // 这里你可以调用后端的 /logout 接口，或者直接删除 Cookie
+        localStorage.removeItem("token"); //清除 Token 退出
+        window.location.href = '/login.html';
+
+    }
+
+    // 工具：格式化时间 (把 2026-01-19T18:00... 变成 2026/01/19 18:00)
+    function formatDate(dateString) {
+        if(!dateString) return '';
+        const date = new Date(dateString);
+        return date.toLocaleString();
+    }
+
+
+</script>
+
+</body>
+</html>
